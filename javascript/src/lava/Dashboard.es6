@@ -1,7 +1,5 @@
-/* jshint undef: true */
-/* globals document, google, require, module */
-
-import Renderable from './Renderable.jsx'
+import Renderable from './Renderable'
+import defer from 'es6-defer';
 
 /**
  * Dashboard module
@@ -12,7 +10,6 @@ import Renderable from './Renderable.jsx'
  * @copyright (c) 2015, KHill Designs
  * @license   MIT
  */
-const Q = require('q');
 
 /**
  * Dashboard Class
@@ -28,8 +25,28 @@ export default class Dashboard extends Renderable
     constructor(label) {
         super('Dashboard', label);
 
-        this.bindings  = [];
-        this.dashboard = null;
-        this.deferred  = Q.defer();
+        this._bindings  = [];
+        this._dashboard = null;
+
+        this.promises   = {
+            rendered: defer(),
+            configure: defer()
+        };
+    }
+
+    getBindings() {
+        return this._bindings;
+    }
+
+    setBindings(value) {
+        this._bindings = value;
+    }
+
+    getDashboard() {
+        return this._dashboard;
+    }
+
+    setDashboard(value) {
+        this._dashboard = value;
     }
 }

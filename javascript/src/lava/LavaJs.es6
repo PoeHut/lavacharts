@@ -1,34 +1,27 @@
 /* jshint undef: true, unused: true */
 /* globals window, document, console, google, module, require */
 
-import Chart from './Chart.jsx'
-import Dashboard from './Dashboard.jsx'
+import _ from 'lodash'
+import Chart from './Chart'
+import Dashboard from './Dashboard'
+import EventEmitter from 'events'
+import {InvalidCallback} from "src/errors/InvalidCallback";
+import {InvalidLabel} from "src/errors/InvalidLabel";
 
 /**
  * LavaJs module
  *
  * @module    lava/Lava
  * @author    Kevin Hill <kevinkhill@gmail.com>
- * @copyright (c) 2015, KHill Designs
+ * @copyright (c) 2017, KHill Designs
  * @license   MIT
  */
-const Q = require('q');
-const _ = require('lodash');
-const util = require('util');
-const EventEmitter = require('events');
-const GOOGLE_LOADER_URL = 'https://www.gstatic.com/charts/loader.js';
+export const GOOGLE_LOADER_URL = 'https://www.gstatic.com/charts/loader.js';
 
 export default class LavaJs extends EventEmitter
 {
     constructor() {
         super();
-
-        /**
-         * Setting the debug flag
-         *
-         * @type {boolean}
-         */
-        this._debug = true;
 
         /**
          * JSON object of config items.
@@ -37,26 +30,12 @@ export default class LavaJs extends EventEmitter
          * @private
          */
         this._config = (function() {
-            if (typeof CONFIG_JSON == 'undefined') {
+            if (typeof CONFIG_JSON === 'undefined') {
                 return {};
             } else {
                 return CONFIG_JSON;
             }
-        })();
-
-        /**
-         * Loading Chart class into LavaJs
-         *
-         * @type {Class.<Chart>}
-         */
-        this.Chart = Chart;
-
-        /**
-         * Loading Dashboard class into LavaJs
-         *
-         * @type {Class.<Dashboard>}
-         */
-        this.Dashboard = Dashboard;
+        }());
 
         /**
          * Array of charts stored in the module.
@@ -81,88 +60,29 @@ export default class LavaJs extends EventEmitter
          * @private
          */
         this._readyCallback = _.noop();
-
-        /**
-         * Error definitions for the module.
-         *
-         * @private
-         */
-        this._errors = require('./Errors.js');
     }
 
     /**
-     * Initialize the Lava.js module by attaching the event listeners
-     * and calling the charts' and dashboards' init methods
+     * Create a new Chart.
      *
      * @public
+     * @param  {String} type Type of chart to create
+     * @param  {String} label Label for the chart
+     * @return {Chart}
      */
-    init() {
-        console.log('lava.js init');
-
-        this.emit('initialized');
-
-        var readyCount = 0;
-
-        this.on('ready', renderable => {
-            console.log(renderable.uuid() + ' ready');
-
-            readyCount++;
-
-            if (readyCount == this._getRenderables().length) {
-                console.log('loading google');
-
-                this._loadGoogle().then(() => {
-                    return this._mapRenderables(renderable => {
-                        console.log('configuring ' + renderable.uuid());
-
-                        return renderable.configure();
-                    });
-                }).then(() => {
-                    return this._mapRenderables(renderable => {
-                        console.log('rendering ' + renderable.uuid());
-
-                        return renderable.render();
-                    });
-                }).then(() => {
-                    console.log('lava.js ready');
-
-                    this._readyCallback();
-                });
-            }
-        });
-    }
-
-
-    /**
-     * Runs the Lava.js module by calling all the renderables' init methods
-     *
-     * @public
-     */
-    run() {
-        console.log('lava.js running');
-
-        this._forEachRenderable(renderable => {
-            console.log('init ' + renderable.uuid());
-
-            renderable.init();
-        });
+    static createChart(type, label) {
+        return new Chart(type, label);
     }
 
     /**
-     * Assigns a callback for when the charts are ready to be interacted with.
-     *
-     * This is used to wrap calls to lava.loadData() or lava.loadOptions()
-     * to protect against accessing charts that aren't loaded yet
+     * Create a new Dashboard with a given label.
      *
      * @public
-     * @param {Function} callback
+     * @param  {String} label
+     * @return {Dashboard}
      */
-    ready(callback) {
-        if (typeof callback !== 'function') {
-            throw new this._errors.InvalidCallback(callback);
-        }
-
-        this._readyCallback = callback;
+    static createDashboard(label) {
+        return new Dashboard(label);
     }
 
     /**
@@ -177,12 +97,87 @@ export default class LavaJs extends EventEmitter
      * @param {Function} callback
      * @return {Function}
      */
-    event(event, chart, callback) {
+    static event (event, chart, callback) {
         if (typeof callback !== 'function') {
-            throw new this._errors.InvalidCallback(callback);
+            throw new InvalidCallback(callback);
         }
 
         return callback(event, chart);
+    }
+
+    /**
+     * Initialize the Lava.js module by attaching the event listeners
+     * and calling the charts' and dashboards' init methods
+     *
+     * @public
+     */
+    init() {
+        console.log('lava.js init');
+
+        let readyCount = 0;
+
+        this.on('ready', renderable => {
+            console.log(renderable.uuid + ' ready');
+
+            readyCount++;
+
+            if (readyCount === this._getRenderables().length) {
+                console.log('loading google');
+
+                this._loadGoogle().then(() => {
+                    return this._mapRenderables(renderable => {
+                        console.log('configuring ' + renderable.uuid);
+
+                        return renderable.configure();
+                    });
+                }).then(() => {
+                    return this._mapRenderables(renderable => {
+                        console.log('rendering ' + renderable.uuid);
+
+                        return renderable.render();
+                    });
+                }).then(() => {
+                    console.log('lava.js ready');
+
+                    this._readyCallback();
+                });
+            }
+        });
+
+        this.emit('initialized');
+    }
+
+
+    /**
+     * Runs the Lava.js module by calling all the renderables' init methods
+     *
+     * @public
+     */
+    run() {
+        console.log('lava.js running');
+
+        this._forEachRenderable(renderable => {
+            console.log('init ' + renderable.uuid);
+
+            renderable.init();
+        });
+    }
+
+    /**
+     * Assigns a callback for when the charts are ready to be interacted with.
+     *
+     * This is used to wrap calls to lava.loadData() or lava.loadOptions()
+     * to protect against accessing charts that aren't loaded yet
+     *
+     * @public
+     * @param {Function} callback
+     */
+    ready (callback) {
+        if (typeof callback !== 'function') {
+            throw new InvalidCallback(callback);
+        }
+
+        this._readyCallback = callback;
     }
 
     /**
@@ -190,12 +185,12 @@ export default class LavaJs extends EventEmitter
      *
      * @param {Chart|Dashboard} renderable
      */
-    store(renderable) {
-        if (renderable instanceof this.Chart) {
-            this.storeChart(renderable);
+    store (renderable) {
+        if (renderable instanceof Chart) {
+            this._storeChart(renderable);
         }
 
-        if (renderable instanceof this.Dashboard) {
+        if (renderable instanceof Dashboard) {
             this.storeDashboard(renderable);
         }
     }
@@ -212,23 +207,23 @@ export default class LavaJs extends EventEmitter
      * @param {String} json
      * @param {Function} callback
      */
-    loadData(label, json, callback) {
-        if (typeof callback == 'undefined') {
+    loadData (label, json, callback) {
+        if (typeof callback === 'undefined') {
             callback = _.noop;
         }
 
         if (typeof callback !== 'function') {
-            throw new this._errors.InvalidCallback(callback);
+            throw new InvalidCallback(callback);
         }
 
         this.getChart(label, chart => {
-            if (typeof json.data != 'undefined') {
-                chart.setData(json.data);
-            } else {
+            if (typeof json.data === 'undefined') {
                 chart.setData(json);
+            } else {
+                chart.setData(json.data);
             }
 
-            if (typeof json.formats != 'undefined') {
+            if (typeof json.formats === 'undefined') {
                 chart.applyFormats(json.formats);
             }
 
@@ -251,16 +246,16 @@ export default class LavaJs extends EventEmitter
      * @param {Function} callback
      */
     loadOptions(label, json, callback) {
-        if (typeof callback == 'undefined') {
+        if (typeof callback === 'undefined') {
             callback = _.noop;
         }
 
         if (typeof callback !== 'function') {
-            throw new this._errors.InvalidCallback(callback);
+            throw new InvalidCallback(callback);
         }
 
         this.getChart(label, chart => {
-            chart.setOptions(json);
+            chart.options = json;
 
             chart.redraw();
 
@@ -274,34 +269,12 @@ export default class LavaJs extends EventEmitter
      * This method is attached to the window resize event with a 300ms debounce
      * to make the charts responsive to the browser resizing.
      */
-    redrawCharts() {
+    redrawAll() {
         _.debounce(_.bind(() => {
             this._forEachRenderable(renderable => {
                 renderable.redraw();
             });
         }, this), 300);
-    }
-
-    /**
-     * Create a new Chart.
-     *
-     * @public
-     * @param  {String} type Type of chart to create
-     * @param  {String} type Label for the chart
-     * @return {Chart}
-     */
-    createChart(type, label) {
-        return new this.Chart(type, label);
-    }
-
-    /**
-     * Stores a chart within the module.
-     *
-     * @public
-     * @param {Chart} chart
-     */
-    storeChart(chart) {
-        this._charts.push(chart);
     }
 
     /**
@@ -320,37 +293,37 @@ export default class LavaJs extends EventEmitter
      * @public
      * @param  {String}   label
      * @param  {Function} callback
+     * @return {Chart}
      * @throws InvalidLabel
      * @throws InvalidCallback
      * @throws ChartNotFound
      */
     getChart(label, callback) {
-        if (typeof label != 'string') {
-            throw new this._errors.InvalidLabel(label);
+        if (typeof label !== 'string') {
+            throw new InvalidLabel(label);
         }
 
-        if (typeof callback != 'function') {
-            throw new this._errors.InvalidCallback(callback);
+        if (typeof callback !== 'function') {
+            throw new InvalidCallback(callback);
         }
 
-        var chart = _.find(this._charts, {label: label});
+        const chart = _.find(this._charts, {label: label});
 
-        if (!chart) {
-            throw new this._errors.ChartNotFound(label);
+        if ( ! hart instanceof Chart) {
+            throw new ChartNotFound(label);
         }
 
         callback(chart);
     }
 
     /**
-     * Create a new Dashboard with a given label.
+     * Stores a chart within the module.
      *
-     * @public
-     * @param  {String} label
-     * @return {Dashboard}
+     * @private
+     * @param {Chart} chart
      */
-    createDashboard(label) {
-        return new this.Dashboard(label);
+    _storeChart(chart) {
+        this._charts.push(chart);
     }
 
     /**
@@ -359,7 +332,7 @@ export default class LavaJs extends EventEmitter
      * @public
      * @param {Dashboard} dash
      */
-    storeDashboard(dash) {
+    _storeDashboard(dash) {
         this._dashboards.push(dash);
     }
 
@@ -369,23 +342,24 @@ export default class LavaJs extends EventEmitter
      * @public
      * @param  {String}   label    Dashboard label.
      * @param  {Function} callback Callback function
+     * @return {Dashboard}
      * @throws InvalidLabel
      * @throws InvalidCallback
      * @throws DashboardNotFound
      */
     getDashboard(label, callback) {
-        if (typeof label != 'string') {
-            throw new this._errors.InvalidLabel(label);
+        if (typeof label !== 'string') {
+            throw new InvalidLabel(label);
         }
 
         if (typeof callback !== 'function') {
-            throw new this._errors.InvalidCallback(callback);
+            throw new InvalidCallback(callback);
         }
 
-        var dash = _.find(this._dashboards, {label: label});
+        const dash = _.find(this._dashboards, {label: label});
 
-        if (dash instanceof this.Dashboard === false) {
-            throw new this._errors.DashboardNotFound(label);
+        if ( ! dash instanceof Dashboard) {
+            throw new DashboardNotFound(label);
         }
 
         callback(dash);
@@ -450,9 +424,10 @@ export default class LavaJs extends EventEmitter
      * Load Google's apis and resolve the promise when ready.
      */
     _loadGoogle() {
-        var $lava = this;
-        var s = document.createElement('script');
-        var deferred = Q.defer();
+        const s = document.createElement('script');
+
+        let $lava = this;
+        let deferred = defer();
 
         s.type = 'text/javascript';
         s.async = true;
@@ -463,8 +438,8 @@ export default class LavaJs extends EventEmitter
             if (event.type === "load" || (/loaded|complete/.test(this.readyState))) {
                 this.onload = this.onreadystatechange = null;
 
-                var packages = $lava._getPackages();
-                var locale   = $lava._getLocale();
+                let packages = $lava._getPackages();
+                let locale   = $lava._getLocale();
 
                 console.log('google loaded');
                 console.log(packages);
